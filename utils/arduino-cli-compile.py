@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 # inside esp8266_deauther/esp8266_deauther
-# call this script
+# call this script:
 # python3 ../utils/arduino-cli-compile.py 2.5.0
 
-import subprocess
 import os
+import shutil
+import subprocess
 import sys
+
 
 boards = [
     "NODEMCU",
@@ -48,27 +50,64 @@ boards = [
     "AVATAR_5W_E14_LAMP",
 ]
 
-version = sys.argv[1]
 
+if len(sys.argv) != 2:
+    print(f"Usage: {sys.argv[0]} <version>")
+    sys.exit(1)
+
+version = sys.argv[1]
 folder = f"../build_{version}"
-os.system(f"mkdir {folder}")
+
+os.makedirs(folder, exist_ok=True)
+
 
 for board in boards:
     print(f"Compiling {board}...", flush=True)
 
-    if os.path.exists(f"{folder}/esp8266_deauther_{version}_{board}.bin"):
+    output_file = (
+        f"{folder}/esp8266_deauther_{version}_{board}.bin"
+    )
+
+    if os.path.exists(output_file):
         print("Already compiled")
         continue
 
-    os.system(f"arduino-cli cache clean")
-    command = f"arduino-cli compile --fqbn deauther:esp8266:generic --build-property \"build.extra_flags=-DESP8266 -D{board}\" --output-dir {folder}"
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-    process.wait()
-    os.system(
-        f"mv {folder}/esp8266_deauther.ino.bin {folder}/esp8266_deauther_{version}_{board}.bin")
-    print(f"OK")
+    command = [
+        "arduino-cli",
+        "compile",
+        "--fqbn",
+        "deauther:esp8266:generic",
+        "--build-property",
+        f"build.extra_flags=-DESP8266 -D{board}",
+        "--output-dir",
+        folder,
+    ]
 
-os.system(f"rm {folder}/esp8266_deauther.ino.elf")
-os.system(f"rm {folder}/esp8266_deauther.ino.map")
+    process = subprocess.run(command)
+
+    if process.returncode != 0:
+        print(f"Compilation failed for {board}")
+        sys.exit(process.returncode)
+
+    compiled_file = f"{folder}/esp8266_deauther.ino.bin"
+
+    if not os.path.exists(compiled_file):
+        print(f"Compilation completed, but binary was not found for {board}")
+        sys.exit(1)
+
+    shutil.move(compiled_file, output_file)
+
+    print("OK")
+
+
+for filename in [
+    "esp8266_deauther.ino.elf",
+    "esp8266_deauther.ino.map",
+]:
+    path = os.path.join(folder, filename)
+
+    if os.path.exists(path):
+        os.remove(path)
+
 
 print("Finished :)")
